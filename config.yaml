@@ -1,0 +1,6 @@
+refreshRate: 5
+specs:
+  namespace: default
+  serviceName: server-service
+  selector: app=server
+  containerPort: "8080"
