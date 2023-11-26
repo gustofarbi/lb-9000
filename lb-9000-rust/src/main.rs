@@ -1,5 +1,7 @@
 use std::convert::Infallible;
 use std::net::SocketAddr;
+use std::ops::Deref;
+use std::pin::Pin;
 use std::sync::Arc;
 
 use anyhow::Result;
@@ -9,9 +11,9 @@ use envconfig::Envconfig;
 use futures::prelude::*;
 use http_body_util::Full;
 use hyper::{Request, Response};
-use hyper::body::Bytes;
+use hyper::body::{Bytes, Incoming};
 use hyper::server::conn::http1;
-use hyper::service::service_fn;
+use hyper::service::Service;
 use hyper_util::rt::TokioIo;
 use k8s_openapi::api::core::v1::Pod;
 use kube::{Api, Client};
@@ -29,23 +31,23 @@ async fn main() -> Result<()> {
     let client = Client::try_default().await?;
     let api = Api::<Pod>::default_namespaced(client);
 
-    let mut pool = Pool::new(api.clone());
-    let refresher = tokio::spawn(async move {
-        pool.refresher(cfg.selector.clone()).await;
+    let pod_list = Arc::new(DashMap::<String, u16>::new());
+    let mut pool = Pool::new(api.clone(), pod_list.clone());
+    tokio::spawn(async move {
+        refresher(cfg.selector.clone(), api, pod_list.clone()).await;
     });
 
-
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
-
     let listener = TcpListener::bind(addr).await?;
 
     loop {
         let (stream, _) = listener.accept().await?;
         let io = TokioIo::new(stream);
+        let pool = pool.clone();
 
         tokio::task::spawn(async move {
             if let Err(err) = http1::Builder::new()
-                .serve_connection(io, service_fn(hello))
+                .serve_connection(io, pool)
                 .await
             {
                 println!("Error serving connection: {:?}", err);
@@ -53,12 +55,10 @@ async fn main() -> Result<()> {
         });
     }
 
-    refresher.await?;
-
     Ok(())
 }
 
-async fn hello(_: Request<hyper::body::Incoming>) -> Result<Response<Full<Bytes>>, Infallible> {
+async fn hello(_: Request<Incoming>) -> Result<Response<Full<Bytes>>, Infallible> {
     Ok(Response::new(Full::new(Bytes::from("Hello, World!"))))
 }
 
@@ -68,39 +68,53 @@ struct Pool {
     api: Api<Pod>,
 }
 
+impl Service<Request<Incoming>> for Pool {
+    type Response = Response<Full<Bytes>>;
+    type Error = hyper::Error;
+    type Future = Pin<Box<dyn Future<Output=Result<Self::Response, Self::Error>> + Send>>;
+
+    fn call(&self, req: Request<Incoming>) -> Self::Future {
+        Box::pin(async { mk_response(String::from("foobar")) })
+    }
+}
+
+fn mk_response(s: String) -> Result<Response<Full<Bytes>>, hyper::Error> {
+    Ok(Response::builder().body(Full::new(Bytes::from(s))).unwrap())
+}
+
+async fn refresher(selector: String, api: Api<Pod>, pod_list: Arc<DashMap<String, u16>>) {
+    let watcher_config = watcher::Config::default()
+        .fields("status.phase=Running")
+        .labels(selector.as_str());
+
+    watcher(api.clone(), watcher_config)
+        .applied_objects()
+        .default_backoff()
+        .try_for_each(|pod| async {
+            let pod = pod;
+            let status = pod.status.expect("no status");
+            let ip = status.pod_ip.expect("no ip");
+
+            if pod.metadata.deletion_timestamp.is_some() {
+                pod_list.remove(&ip);
+                println!("pod '{}' deleted", &ip);
+            } else {
+                pod_list.insert(ip.clone(), 0);
+                println!("pod '{}' added", &ip);
+            }
+
+            Ok(())
+        })
+        .await
+        .unwrap();
+}
+
 impl Pool {
-    fn new(api: Api<Pod>) -> Self {
+    fn new(api: Api<Pod>, pod_list: Arc<DashMap<String, u16>>) -> Self {
         Pool {
-            pod_list: Arc::new(DashMap::new()),
+            pod_list,
             api,
         }
-    }
-
-    async fn refresher(&mut self, selector: String) {
-        let watcher_config = watcher::Config::default()
-            .fields("status.phase=Running")
-            .labels(selector.as_str());
-
-        watcher(self.api.clone(), watcher_config)
-            .applied_objects()
-            .default_backoff()
-            .try_for_each(|pod| async {
-                let pod = pod;
-                let status = pod.status.expect("no status");
-                let ip = status.pod_ip.expect("no ip");
-
-                if pod.metadata.deletion_timestamp.is_some() {
-                    self.pod_list.remove(&ip);
-                    println!("pod '{}' deleted", &ip);
-                } else {
-                    self.pod_list.insert(ip.clone(), 0);
-                    println!("pod '{}' added", &ip);
-                }
-
-                Ok(())
-            })
-            .await
-            .unwrap();
     }
 }
 
