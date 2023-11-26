@@ -18,6 +18,7 @@ use hyper_util::rt::TokioIo;
 use k8s_openapi::api::core::v1::Pod;
 use kube::{Api, Client};
 use kube::runtime::{watcher, WatchStreamExt};
+use reqwest::{Method, Url};
 use tokio::net::TcpListener;
 
 #[tokio::main]
@@ -32,7 +33,12 @@ async fn main() -> Result<()> {
     let api = Api::<Pod>::default_namespaced(client);
 
     let pod_list = Arc::new(DashMap::<String, u16>::new());
-    let mut pool = Pool::new(api.clone(), pod_list.clone());
+    let mut pool = Pool::new(
+        api.clone(),
+        pod_list.clone(),
+        cfg.clone(),
+    );
+
     tokio::spawn(async move {
         refresher(cfg.selector.clone(), api, pod_list.clone()).await;
     });
@@ -62,25 +68,46 @@ async fn hello(_: Request<Incoming>) -> Result<Response<Full<Bytes>>, Infallible
     Ok(Response::new(Full::new(Bytes::from("Hello, World!"))))
 }
 
-#[derive(Clone)]
-struct Pool {
-    pod_list: Arc<DashMap<String, u16>>,
-    api: Api<Pod>,
-}
 
 impl Service<Request<Incoming>> for Pool {
     type Response = Response<Full<Bytes>>;
     type Error = hyper::Error;
     type Future = Pin<Box<dyn Future<Output=Result<Self::Response, Self::Error>> + Send>>;
+    // type Future = future;
 
     fn call(&self, req: Request<Incoming>) -> Self::Future {
-        Box::pin(async { mk_response(String::from("foobar")) })
+        let pod = self.pod_list
+            .iter()
+            .min_by(|a, b| a.value().cmp(b.value()))
+            .unwrap();
+
+        let url = format!(
+            "{}.{}.{}.svc.cluster.local:{}",
+            pod.key().replace(".", "-"),
+            self.config.service_name,
+            self.config.namespace,
+            self.config.container_port,
+        );
+
+        Box::pin(
+            async move {
+                reqwest::Client::new()
+                    .execute(reqwest::Request::new(
+                        Method::GET,
+                        Url::parse(
+                            url.as_str(),
+                        ).unwrap(),
+                    )).await.unwrap();
+                mk_response(String::from("foobar"))
+            }
+        )
     }
 }
 
 fn mk_response(s: String) -> Result<Response<Full<Bytes>>, hyper::Error> {
     Ok(Response::builder().body(Full::new(Bytes::from(s))).unwrap())
 }
+
 
 async fn refresher(selector: String, api: Api<Pod>, pod_list: Arc<DashMap<String, u16>>) {
     let watcher_config = watcher::Config::default()
@@ -109,16 +136,24 @@ async fn refresher(selector: String, api: Api<Pod>, pod_list: Arc<DashMap<String
         .unwrap();
 }
 
+#[derive(Clone)]
+struct Pool {
+    pod_list: Arc<DashMap<String, u16>>,
+    api: Api<Pod>,
+    config: AppConfig,
+}
+
 impl Pool {
-    fn new(api: Api<Pod>, pod_list: Arc<DashMap<String, u16>>) -> Self {
+    fn new(api: Api<Pod>, pod_list: Arc<DashMap<String, u16>>, config: AppConfig) -> Self {
         Pool {
             pod_list,
             api,
+            config,
         }
     }
 }
 
-#[derive(Envconfig)]
+#[derive(Envconfig, Clone)]
 struct AppConfig {
     namespace: String,
     service_name: String,
