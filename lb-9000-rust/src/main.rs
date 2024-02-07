@@ -1,5 +1,4 @@
-use std::net::SocketAddr;
-use std::pin::Pin;
+use std::str::FromStr;
 use std::sync::Arc;
 
 use anyhow::Result;
@@ -7,17 +6,14 @@ use dashmap::DashMap;
 use dotenvy::dotenv;
 use envconfig::Envconfig;
 use futures::prelude::*;
-use http_body_util::Full;
-use hyper::body::{Bytes, Incoming};
-use hyper::server::conn::http1;
 use hyper::service::Service;
-use hyper::{Request, Response};
-use hyper_util::rt::TokioIo;
+use hyper::Request;
 use k8s_openapi::api::core::v1::Pod;
 use kube::runtime::{watcher, WatchStreamExt};
 use kube::{Api, Client};
-use reqwest::{Method, Url};
-use tokio::net::TcpListener;
+use warp::hyper::body::Bytes;
+use warp::path::FullPath;
+use warp::{Filter, Rejection};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -46,65 +42,52 @@ async fn main() -> Result<()> {
         refresher(cfg.selector.clone(), api.clone(), Arc::clone(&pod_list)).await;
     });
 
-    let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
-    let listener = TcpListener::bind(addr).await?;
+    let health = warp::get().and(warp::path("health")).map(|| "ok");
 
-    loop {
-        let (stream, _) = listener.accept().await?;
-        let io = TokioIo::new(stream);
-        let pool = pool.clone();
+    let proxy = http_request().map(|req| "ok");
+    let routes = proxy.or(health);
 
-        tokio::task::spawn(async move {
-            if let Err(err) = http1::Builder::new().serve_connection(io, pool).await {
-                println!("Error serving connection: {:?}", err);
-            }
-        });
-    }
+    warp::serve(routes).run(([0, 0, 0, 0], 3000)).await;
+
+    Ok(())
 }
 
-impl Service<Request<Incoming>> for Pool {
-    type Response = Response<Full<Bytes>>;
-    type Error = hyper::Error;
-    type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
-    // type Future = future;
+pub fn http_request() -> impl Filter<Extract = (http::Request<Bytes>,), Error = Rejection> + Copy {
+    // TODO: extract `hyper::Request` instead
+    // blocked by https://github.com/seanmonstar/warp/issues/139
+    warp::any()
+        .and(warp::method())
+        .and(warp::filters::path::full())
+        .and(warp::filters::query::raw())
+        .and(warp::header::headers_cloned())
+        .and(warp::body::bytes())
+        .and_then(
+            |method: warp::http::Method,
+             path: FullPath,
+             query: String,
+             headers: warp::http::HeaderMap,
+             bytes| async move {
+                let uri = http::uri::Builder::new()
+                    .path_and_query(format!("{}?{}", path.as_str(), query))
+                    .build()
+                    .unwrap();
 
-    fn call(&self, _req: Request<Incoming>) -> Self::Future {
-        let pod_item = self
-            .pod_list
-            .iter()
-            .min_by(|a, b| a.value().cmp(b.value()))
-            .unwrap();
+                let mut request = http::Request::builder()
+                    .method(&hyper::Method::from_str(method.as_str()).unwrap())
+                    .uri(uri)
+                    .body(bytes)
+                    .unwrap();
 
-        let url = format!(
-            "{}.{}.{}.svc.cluster.local:{}",
-            pod_item.key().replace(".", "-"),
-            self.config.service_name,
-            self.config.namespace,
-            self.config.container_port,
-        );
+                *request.headers_mut() = hyper::HeaderMap::new();
 
-        let tx = self.tx.clone();
-        tx.try_send(Message::new(pod_item.key().clone(), 1))
-            .unwrap();
-
-        let ip = pod_item.key().clone();
-        Box::pin(async move {
-            let _response = reqwest::Client::new()
-                .execute(reqwest::Request::new(
-                    Method::GET,
-                    Url::parse(url.as_str()).unwrap(),
-                ))
-                .await
-                .unwrap();
-
-            tx.try_send(Message::new(ip, -1)).unwrap();
-            mk_response(String::from("foobar"))
-        })
-    }
+                Ok::<http::Request<Bytes>, Rejection>(request)
+            },
+        )
 }
-
-fn mk_response(s: String) -> Result<Response<Full<Bytes>>, hyper::Error> {
-    Ok(Response::builder().body(Full::new(Bytes::from(s))).unwrap())
+#[derive(thiserror::Error, Debug)]
+pub enum Error {
+    #[error(transparent)]
+    Http(#[from] http::Error),
 }
 
 async fn refresher(selector: String, api: Api<Pod>, pod_list: Arc<DashMap<String, i16>>) {

@@ -40,7 +40,7 @@ func fetchURL(url string) {
 		return
 	}
 
-	if response.StatusCode == 200 {
+	if response.StatusCode == http.StatusOK {
 		b, err := io.ReadAll(response.Body)
 		if err != nil {
 			slog.Error("error reading response body", "err", err)

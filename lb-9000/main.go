@@ -11,19 +11,22 @@ import (
 )
 
 func main() {
+	// todo dont panic
 	appConfig, err := appconfig.Parse("lb-9000/internal/config/config.yaml")
 	if err != nil {
 		panic(err)
 	}
 
-	var clientset *kubernetes.Clientset
-
-	{
+	clientset, err := func() (*kubernetes.Clientset, error) {
 		config, err := rest.InClusterConfig()
 		if err != nil {
-			panic(err)
+			return nil, err
 		}
-		clientset = kubernetes.NewForConfigOrDie(config)
+		return kubernetes.NewForConfigOrDie(config), nil
+	}()
+
+	if err != nil {
+		panic(err)
 	}
 
 	ctx := context.Background()
