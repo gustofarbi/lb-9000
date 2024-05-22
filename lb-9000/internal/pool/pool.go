@@ -14,13 +14,12 @@ import (
 	"math"
 	"net"
 	"net/http"
+	"net/url"
 	"strings"
-	"sync"
 	"time"
 )
 
 type Pool struct {
-	sync.Mutex
 	pods cmap.ConcurrentMap[string, int]
 
 	clientset *kubernetes.Clientset
@@ -52,7 +51,6 @@ func (p *Pool) Director(request *http.Request) {
 	minCount := math.MaxInt
 	var minIp string
 
-	p.Lock()
 	// todo naive implementation: is it fast enough?
 	for ip := range p.pods.IterBuffered() {
 		if ip.Val < minCount {
@@ -65,7 +63,6 @@ func (p *Pool) Director(request *http.Request) {
 	}
 
 	p.increaseCount(minIp, 1)
-	p.Unlock()
 
 	p.logger.Info(fmt.Sprintf("request directed to '%s' which has '%d' requests", minIp, minCount))
 
@@ -189,16 +186,19 @@ func (p *Pool) increaseCount(ip string, delta int) {
 
 func (p *Pool) startLogger() {
 	for range time.Tick(1 * time.Second) {
-		p.Lock()
-
 		for pod := range p.pods.IterBuffered() {
 			p.logger.Info(fmt.Sprintf("pod '%s' has '%d' requests", pod.Key, pod.Val))
 		}
-		p.Unlock()
 	}
 }
+
 func getIpFromHost(host string) (string, error) {
-	ip, _, ok := strings.Cut(host, ".")
+	parsedUrl, err := url.ParseRequestURI(host)
+	if err != nil {
+		return "", fmt.Errorf("could not parse url '%s': %w", host, err)
+	}
+
+	ip, _, ok := strings.Cut(parsedUrl.Host, ".")
 	if !ok {
 		return "", fmt.Errorf("expected to be able to cut host")
 	}

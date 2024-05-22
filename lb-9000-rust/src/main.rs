@@ -1,3 +1,4 @@
+use std::convert::TryInto;
 use std::str::FromStr;
 use std::sync::Arc;
 
@@ -6,14 +7,12 @@ use dashmap::DashMap;
 use dotenvy::dotenv;
 use envconfig::Envconfig;
 use futures::prelude::*;
-use hyper::service::Service;
-use hyper::Request;
 use k8s_openapi::api::core::v1::Pod;
-use kube::runtime::{watcher, WatchStreamExt};
 use kube::{Api, Client};
+use kube::runtime::{watcher, WatchStreamExt};
+use warp::{Filter, Rejection};
 use warp::hyper::body::Bytes;
 use warp::path::FullPath;
-use warp::{Filter, Rejection};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -44,7 +43,10 @@ async fn main() -> Result<()> {
 
     let health = warp::get().and(warp::path("health")).map(|| "ok");
 
-    let proxy = http_request().map(|req| "ok");
+    let proxy = http_request()
+        .map(move |r| (r, pool.clone()))
+        .and_then(|(r, p)| async move { Ok::<_, Rejection>("ok") });
+
     let routes = proxy.or(health);
 
     warp::serve(routes).run(([0, 0, 0, 0], 3000)).await;
@@ -52,7 +54,7 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-pub fn http_request() -> impl Filter<Extract = (http::Request<Bytes>,), Error = Rejection> + Copy {
+pub fn http_request() -> impl Filter<Extract=(http::Request<Bytes>, ), Error=Rejection> + Copy {
     // TODO: extract `hyper::Request` instead
     // blocked by https://github.com/seanmonstar/warp/issues/139
     warp::any()
@@ -84,6 +86,7 @@ pub fn http_request() -> impl Filter<Extract = (http::Request<Bytes>,), Error = 
             },
         )
 }
+
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
     #[error(transparent)]
@@ -145,6 +148,7 @@ struct Pool {
     pod_list: Arc<DashMap<String, i16>>,
     config: AppConfig,
     tx: tokio::sync::mpsc::Sender<Message>,
+    client: reqwest::Client,
 }
 
 impl Pool {
@@ -157,6 +161,51 @@ impl Pool {
             pod_list,
             config,
             tx,
+            client: reqwest::Client::new(),
+        }
+    }
+
+    async fn proxy(&self, request: http::Request<Bytes>) -> Result<http::Response<Bytes>> {
+        let ip = self.get_ip()?;
+
+        let url = format!("http://{}:{}", ip, self.config.container_port);
+
+        let mut request = request;
+        *request.uri_mut() = url.parse().unwrap();
+
+        let request = reqwest::Request::new(
+            reqwest::Method::from_str(request.method().as_str()).unwrap(),
+            request.uri().to_string().parse().unwrap(),
+        );
+        let proxy_response = self.client.execute(request).await?;
+
+        let mut builder = http::Response::builder()
+            .status(proxy_response.status().as_u16());
+
+        let headers = builder.headers_mut().unwrap();
+
+        proxy_response.headers().iter().for_each(|(k, v)| {
+            headers.insert(
+                http::header::HeaderName::from_str(k.as_str()).unwrap(),
+                http::HeaderValue::from_str(v.to_str().unwrap()).unwrap(),
+            );
+        });
+
+        let body = proxy_response.bytes().await?;
+
+        Ok(builder.body(body).unwrap())
+    }
+
+    fn get_ip(&self) -> Result<String> {
+        let mut item = self
+            .pod_list
+            .iter_mut()
+            .min_by(|a, b| a.value().cmp(b.value()))
+            .take();
+
+        match item {
+            Some(item) => Ok(item.key().to_owned()),
+            None => Err(anyhow::anyhow!("no available pod")),
         }
     }
 }
