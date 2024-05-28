@@ -21,6 +21,22 @@ spec:
           volumeMounts:
             - mountPath: /go/src/app
               name: code
+          # todo could be this is not needed
+          readinessProbe:
+            initialDelaySeconds: 1
+            httpGet:
+              path: /health
+              port: 8081
+          livenessProbe:
+            initialDelaySeconds: 1
+            httpGet:
+              path: /health
+              port: 8081
+          startupProbe:
+            initialDelaySeconds: 1
+            httpGet:
+              path: /health
+              port: 8081
       volumes:
         - name: code
           hostPath:

@@ -1,4 +1,4 @@
-FROM golang:1.21.0-alpine3.18
+FROM golang:1.22.3-alpine3.19
 
 WORKDIR /go/src/app
 

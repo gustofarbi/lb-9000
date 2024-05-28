@@ -13,6 +13,14 @@ func Start(podPool *pool.Pool, port string) {
 		ModifyResponse: podPool.ModifyResponse,
 	}
 
+	go func() {
+		mux := http.NewServeMux()
+		mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {})
+		if err := http.ListenAndServe(":8081", mux); err != nil {
+			slog.Error("error serving health requests", "err", err)
+		}
+	}()
+
 	slog.Info("listening on", "port", port)
 	if err := http.ListenAndServe(":"+port, &proxy); err != nil {
 		slog.Error("error listening", "err", err)
