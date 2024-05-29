@@ -4,26 +4,26 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"lb-9000/internal/config"
-	"lb-9000/internal/pod"
+	core "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/watch"
+	"k8s.io/client-go/kubernetes"
+	"lb-9000/lb-9000/internal/config"
+	"lb-9000/lb-9000/internal/pod"
 	"log/slog"
 	"net"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
-
-	core "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/watch"
-	"k8s.io/client-go/kubernetes"
 )
 
 type Pool struct {
-	podMap *pod.PodMap
+	podMap *pod.Map
 
 	clientset *kubernetes.Clientset
 	logger    *slog.Logger
+	watcher   watch.Interface
 
 	initialized bool
 
@@ -48,12 +48,16 @@ func (p *Pool) Director(request *http.Request) {
 		panic("pool not initialized")
 	}
 
-	pod := p.podMap.Elect()
-	minIp := pod.IP()
+	elected := p.podMap.Elect()
+	minIp := elected.IP()
 
 	p.podMap.Delta(minIp, 1)
 
-	p.logger.Info(fmt.Sprintf("request directed to '%s' which has '%d' requests", minIp, pod.Count()))
+	p.logger.Info(
+		"request directed to pod",
+		"podIp", minIp,
+		"requests", elected.Count(),
+	)
 
 	if minIp == "" {
 		// todo what to do here?
@@ -73,7 +77,7 @@ func (p *Pool) Director(request *http.Request) {
 func (p *Pool) ModifyResponse(response *http.Response) error {
 	ip, err := getIpFromHost(response.Request.URL.Host)
 	if err != nil {
-		p.logger.Error("error getting ip from host", "err", err)
+		return fmt.Errorf("error getting ip from host: %w", err)
 	}
 
 	// one less request to this pod
@@ -99,7 +103,9 @@ func (p *Pool) Init(ctx context.Context) error {
 		return fmt.Errorf("error watching pods: %w", err)
 	}
 
-	go p.refreshLoop(watcher)
+	p.watcher = watcher
+
+	go p.refreshLoop()
 	go p.startLogger()
 
 	p.initialized = true
@@ -108,9 +114,13 @@ func (p *Pool) Init(ctx context.Context) error {
 	return nil
 }
 
-func (p *Pool) refreshLoop(watcher watch.Interface) {
-	for event := range watcher.ResultChan() {
-		pod, ok := event.Object.(*core.Pod)
+func (p *Pool) Stop() {
+	p.watcher.Stop()
+}
+
+func (p *Pool) refreshLoop() {
+	for event := range p.watcher.ResultChan() {
+		podFromEvent, ok := event.Object.(*core.Pod)
 		if !ok {
 			p.logger.Error("unexpected object type", "object", event.Object)
 			continue
@@ -120,19 +130,19 @@ func (p *Pool) refreshLoop(watcher watch.Interface) {
 		case watch.Added:
 			// when a pod is added, it needs to be added to the pool
 			// at this time the pod may not have an IP assigned yet
-			p.podMap.Add(pod.Status.PodIP, pod.Name)
+			p.podMap.Add(podFromEvent.Status.PodIP, podFromEvent.Name)
 		case watch.Deleted:
 			// when a pod is deleted, it needs to be removed from the pool
-			p.podMap.Delete(pod.Status.PodIP)
+			p.podMap.Delete(podFromEvent.Status.PodIP)
 		case watch.Modified:
 			// there are several cases when a pod is modified:
 			// 1. the pod is being deleted -> it will have a deletion timestamp
 			// 2. the pod changed state and is now running -> it will have an IP
-			if pod.DeletionTimestamp != nil {
-				p.podMap.Delete(pod.Status.PodIP)
-			} else if pod.Status.PodIP != "" {
+			if podFromEvent.DeletionTimestamp != nil {
+				p.podMap.Delete(podFromEvent.Status.PodIP)
+			} else if podFromEvent.Status.PodIP != "" {
 				// todo look at the state here maybe?
-				p.podMap.Add(pod.Status.PodIP, pod.Name)
+				p.podMap.Add(podFromEvent.Status.PodIP, podFromEvent.Name)
 			}
 		}
 	}
@@ -145,17 +155,11 @@ func (p *Pool) startLogger() {
 }
 
 func getIpFromHost(host string) (string, error) {
-	// todo idk this should be done in a different way
-	if !strings.HasPrefix(host, "http") {
-		host = "http://" + host
+	if parsedUrl, err := url.ParseRequestURI(host); err == nil {
+		host = parsedUrl.Host
 	}
 
-	parsedUrl, err := url.ParseRequestURI(host)
-	if err != nil {
-		return "", fmt.Errorf("could not parse url '%s': %w", host, err)
-	}
-
-	ip, _, ok := strings.Cut(parsedUrl.Host, ".")
+	ip, _, ok := strings.Cut(host, ".")
 	if !ok {
 		return "", fmt.Errorf("expected to be able to cut host")
 	}

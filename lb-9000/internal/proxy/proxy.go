@@ -1,7 +1,7 @@
 package proxy
 
 import (
-	"lb-9000/internal/pool"
+	"lb-9000/lb-9000/internal/pool"
 	"log/slog"
 	"net/http"
 	"net/http/httputil"

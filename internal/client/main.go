@@ -6,12 +6,26 @@ import (
 	"log/slog"
 	"math/rand"
 	"net/http"
+	"os"
+	"strconv"
 )
 
 var (
-	semaphore = make(chan struct{}, 30)
-	acquire   = func() { semaphore <- struct{}{} }
-	release   = func() { <-semaphore }
+	semaphore = func() chan struct{} {
+		numWorkers := os.Getenv("NUM_WORKERS")
+		if numWorkers == "" {
+			numWorkers = "30"
+		}
+
+		n, err := strconv.Atoi(numWorkers)
+		if err != nil {
+			n = 30
+		}
+
+		return make(chan struct{}, n)
+	}()
+	acquire = func() { semaphore <- struct{}{} }
+	release = func() { <-semaphore }
 )
 
 func main() {

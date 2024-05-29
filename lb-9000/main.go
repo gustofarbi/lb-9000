@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
-	appconfig "lb-9000/internal/config"
-	"lb-9000/internal/pool"
-	"lb-9000/internal/proxy"
+	appconfig "lb-9000/lb-9000/internal/config"
+	"lb-9000/lb-9000/internal/pool"
+	"lb-9000/lb-9000/internal/proxy"
 	"log/slog"
 	"os"
 )
@@ -45,6 +45,8 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("initiating pool: %w", err)
 	}
+
+	defer podPool.Stop()
 
 	proxy.Start(podPool, "8080")
 

@@ -21,17 +21,17 @@ func (p *Pod) Count() int64 {
 	return p.count.Load()
 }
 
-type PodMap struct {
+type Map struct {
 	inner  map[string]*Pod
 	logger *slog.Logger
 }
 
-func NewPodMap(logger *slog.Logger) *PodMap {
+func NewPodMap(logger *slog.Logger) *Map {
 	if logger == nil {
 		logger = slog.Default()
 	}
 
-	return &PodMap{
+	return &Map{
 		inner:  make(map[string]*Pod),
 		logger: logger,
 	}
@@ -45,13 +45,13 @@ func NewPod(ip, name string) *Pod {
 	}
 }
 
-func (p *PodMap) Add(ip, name string) {
+func (p *Map) Add(ip, name string) {
 	p.logger.Info("adding", "ip", ip, "name", name)
 
 	p.inner[ip] = NewPod(ip, name)
 }
 
-func (p *PodMap) Delete(ip string) {
+func (p *Map) Delete(ip string) {
 	if ip == "" {
 		return
 	}
@@ -60,7 +60,7 @@ func (p *PodMap) Delete(ip string) {
 	delete(p.inner, ip)
 }
 
-func (p *PodMap) Elect() *Pod {
+func (p *Map) Elect() *Pod {
 	var (
 		minCount int64 = math.MaxInt64
 		minPod   *Pod
@@ -81,7 +81,7 @@ func (p *PodMap) Elect() *Pod {
 	return minPod
 }
 
-func (p *PodMap) Delta(ip string, delta int64) {
+func (p *Map) Delta(ip string, delta int64) {
 	if ip == "" {
 		return
 	}
@@ -96,7 +96,7 @@ func (p *PodMap) Delta(ip string, delta int64) {
 	pod.count.Store(newCount)
 }
 
-func (p *PodMap) DebugPrint() {
+func (p *Map) DebugPrint() {
 	for _, pod := range p.inner {
 		p.logger.Info(fmt.Sprintf("pod '%s' has '%d' requests", pod.ip, pod.count.Load()))
 	}
