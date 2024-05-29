@@ -18,9 +18,6 @@ spec:
         - name: lb
           image: lb
           imagePullPolicy: IfNotPresent
-          volumeMounts:
-            - mountPath: /go/src/app
-              name: code
           # todo could be this is not needed
           readinessProbe:
             initialDelaySeconds: 1
@@ -37,11 +34,6 @@ spec:
             httpGet:
               path: /health
               port: 8081
-      volumes:
-        - name: code
-          hostPath:
-            path: /code
-            type: Directory
 ---
 apiVersion: v1
 kind: Service

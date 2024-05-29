@@ -27,18 +27,18 @@ type Pool struct {
 
 	initialized bool
 
-	specs config.Specs
+	cfg *config.Config
 }
 
 func New(
 	clientset *kubernetes.Clientset,
-	specs config.Specs,
+	cfg *config.Config,
 	logger *slog.Logger,
 ) *Pool {
 	return &Pool{
 		podMap:    pod.NewPodMap(logger),
 		clientset: clientset,
-		specs:     specs,
+		cfg:       cfg,
 		logger:    logger,
 	}
 }
@@ -64,9 +64,9 @@ func (p *Pool) Director(request *http.Request) {
 	request.URL.Host = fmt.Sprintf(
 		"%s.%s.%s.svc.cluster.local:%d",
 		strings.Replace(minIp, ".", "-", -1),
-		p.specs.ServiceName,
-		p.specs.Namespace,
-		p.specs.ContainerPort,
+		p.cfg.Specs.ServiceName,
+		p.cfg.Specs.Namespace,
+		p.cfg.Specs.ContainerPort,
 	)
 }
 
@@ -89,9 +89,9 @@ func (p *Pool) Init(ctx context.Context) error {
 
 	watcher, err := p.clientset.
 		CoreV1().
-		Pods(p.specs.Namespace).
+		Pods(p.cfg.Specs.Namespace).
 		Watch(ctx, metav1.ListOptions{
-			LabelSelector: p.specs.Selector,
+			LabelSelector: p.cfg.Specs.Selector,
 			FieldSelector: "status.phase=" + string(core.PodRunning),
 		})
 
@@ -139,7 +139,7 @@ func (p *Pool) refreshLoop(watcher watch.Interface) {
 }
 
 func (p *Pool) startLogger() {
-	for range time.Tick(1 * time.Second) {
+	for range time.Tick(p.cfg.RefreshRate) {
 		p.podMap.DebugPrint()
 	}
 }

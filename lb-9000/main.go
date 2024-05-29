@@ -39,7 +39,7 @@ func run() error {
 
 	ctx := context.Background()
 
-	podPool := pool.New(clientset, appConfig.Specs, slog.Default())
+	podPool := pool.New(clientset, appConfig, slog.Default())
 	err = podPool.Init(ctx)
 
 	if err != nil {
