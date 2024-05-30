@@ -1,7 +1,7 @@
 build-images:
-	docker build -f internal/server/Dockerfile -t server/lb-dummy ./internal/server
-	docker build -f internal/client/Dockerfile -t client/lb-dummy ./internal/client
-	docker build -f lb-9000/Dockerfile -t lb ./lb-9000
+	docker build -f internal/server/Dockerfile -t server/lb-dummy .
+	docker build -f internal/client/Dockerfile -t client/lb-dummy .
+	docker build -f lb-9000/Dockerfile -t lb .
 
 pull-images:
 	kind load docker-image server/lb-dummy client/lb-dummy lb --name kind
