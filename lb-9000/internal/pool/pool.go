@@ -8,8 +8,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
+	"lb-9000/lb-9000/internal/backend"
 	"lb-9000/lb-9000/internal/config"
-	"lb-9000/lb-9000/internal/pod"
+	"lb-9000/lb-9000/internal/store"
+	"lb-9000/lb-9000/internal/store/memory"
 	"log/slog"
 	"net"
 	"net/http"
@@ -19,7 +21,7 @@ import (
 )
 
 type Pool struct {
-	podMap *pod.Map
+	backendStore store.Store
 
 	clientset *kubernetes.Clientset
 	logger    *slog.Logger
@@ -30,16 +32,17 @@ type Pool struct {
 	cfg *config.Config
 }
 
+// todo pass store as argument
 func New(
 	clientset *kubernetes.Clientset,
 	cfg *config.Config,
 	logger *slog.Logger,
 ) *Pool {
 	return &Pool{
-		podMap:    pod.NewPodMap(logger),
-		clientset: clientset,
-		cfg:       cfg,
-		logger:    logger,
+		backendStore: memory.NewMemoryStore(logger),
+		clientset:    clientset,
+		cfg:          cfg,
+		logger:       logger,
 	}
 }
 
@@ -48,18 +51,22 @@ func (p *Pool) Director(request *http.Request) {
 		panic("pool not initialized")
 	}
 
-	elected := p.podMap.Elect()
-	minIp := elected.IP()
+	elected := p.backendStore.Elect()
+	if elected == nil {
+		panic("no pods available")
+	}
 
-	p.podMap.Delta(minIp, 1)
+	minUrl := elected.URL()
+
+	p.backendStore.AddRequests(minUrl, 1)
 
 	p.logger.Info(
 		"request directed to pod",
-		"podIp", minIp,
+		"podIp", minUrl,
 		"requests", elected.Count(),
 	)
 
-	if minIp == "" {
+	if minUrl == "" {
 		// todo what to do here?
 		return
 	}
@@ -67,7 +74,7 @@ func (p *Pool) Director(request *http.Request) {
 	request.URL.Scheme = "http"
 	request.URL.Host = fmt.Sprintf(
 		"%s.%s.%s.svc.cluster.local:%d",
-		strings.Replace(minIp, ".", "-", -1),
+		strings.Replace(minUrl, ".", "-", -1),
 		p.cfg.Specs.ServiceName,
 		p.cfg.Specs.Namespace,
 		p.cfg.Specs.ContainerPort,
@@ -81,7 +88,7 @@ func (p *Pool) ModifyResponse(response *http.Response) error {
 	}
 
 	// one less request to this pod
-	p.podMap.Delta(ip, -1)
+	p.backendStore.AddRequests(ip, -1)
 
 	return nil
 }
@@ -129,20 +136,20 @@ func (p *Pool) refreshLoop() {
 		switch event.Type {
 		case watch.Added:
 			// when a pod is added, it needs to be added to the pool
-			// at this time the pod may not have an IP assigned yet
-			p.podMap.Add(podFromEvent.Status.PodIP, podFromEvent.Name)
+			// at this time the pod may not have an URL assigned yet
+			p.backendStore.Add(backend.NewBackend(podFromEvent.Status.PodIP, podFromEvent.Name))
 		case watch.Deleted:
 			// when a pod is deleted, it needs to be removed from the pool
-			p.podMap.Delete(podFromEvent.Status.PodIP)
+			p.backendStore.Remove(podFromEvent.Status.PodIP)
 		case watch.Modified:
 			// there are several cases when a pod is modified:
 			// 1. the pod is being deleted -> it will have a deletion timestamp
-			// 2. the pod changed state and is now running -> it will have an IP
+			// 2. the pod changed state and is now running -> it will have an URL
 			if podFromEvent.DeletionTimestamp != nil {
-				p.podMap.Delete(podFromEvent.Status.PodIP)
+				p.backendStore.Remove(podFromEvent.Status.PodIP)
 			} else if podFromEvent.Status.PodIP != "" {
 				// todo look at the state here maybe?
-				p.podMap.Add(podFromEvent.Status.PodIP, podFromEvent.Name)
+				p.backendStore.Add(backend.NewBackend(podFromEvent.Status.PodIP, podFromEvent.Name))
 			}
 		}
 	}
@@ -150,7 +157,7 @@ func (p *Pool) refreshLoop() {
 
 func (p *Pool) startLogger() {
 	for range time.Tick(p.cfg.RefreshRate) {
-		p.podMap.DebugPrint()
+		p.backendStore.DebugPrint()
 	}
 }
 

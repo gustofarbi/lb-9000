@@ -1,6 +1,7 @@
 package pool
 
 import (
+	"github.com/stretchr/testify/assert"
 	"testing"
 )
 
@@ -8,22 +9,13 @@ func TestGetIpFromUrl(t *testing.T) {
 	raw := "http://10-244-0-6.server-service.default.svc.cluster.local:8080/"
 
 	ip, err := getIpFromHost(raw)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if ip != "10.244.0.6" {
-		t.Errorf("expected ip to be 10-244-0-6, got %s", ip)
-	}
+	assert.Nil(t, err)
+	assert.Equal(t, "10.244.0.6", ip)
 
 	raw = "10-244-0-6.server-service.default.svc.cluster.local:8080/"
 
 	ip, err = getIpFromHost(raw)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.Nil(t, err)
 
-	if ip != "10.244.0.6" {
-		t.Errorf("expected ip to be 10-244-0-6, got %s", ip)
-	}
+	assert.Equal(t, "10.244.0.6", ip)
 }

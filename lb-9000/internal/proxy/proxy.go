@@ -7,10 +7,10 @@ import (
 	"net/http/httputil"
 )
 
-func Start(podPool *pool.Pool, port string) {
+func Start(pool *pool.Pool, port string) {
 	proxy := httputil.ReverseProxy{
-		Director:       podPool.Director,
-		ModifyResponse: podPool.ModifyResponse,
+		Director:       pool.Director,
+		ModifyResponse: pool.ModifyResponse,
 	}
 
 	go func() {
