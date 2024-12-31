@@ -2,6 +2,7 @@ package memory
 
 import (
 	"fmt"
+	"iter"
 	"lb-9000/lb-9000/internal/backend"
 	"log/slog"
 	"math"
@@ -26,34 +27,34 @@ func NewMemoryStore(logger *slog.Logger) *Map {
 	}
 }
 
-func (p *Map) Add(backend *backend.Backend) {
+func (m *Map) Add(backend *backend.Backend) {
 	url := backend.URL()
 	name := backend.Name()
 
-	p.logger.Info("adding", "url", url, "name", name)
+	m.logger.Info("adding", "url", url, "name", name)
 
-	p.inner[url] = backend
+	m.inner[url] = backend
 }
 
-func (p *Map) Remove(url string) {
+func (m *Map) Remove(url string) {
 	if url == "" {
 		return
 	}
 
-	p.logger.Info(fmt.Sprintf("pod '%s' deleted", url))
-	delete(p.inner, url)
+	m.logger.Info(fmt.Sprintf("pod '%s' deleted", url))
+	delete(m.inner, url)
 }
 
-func (p *Map) Elect() *backend.Backend {
+func (m *Map) Elect() *backend.Backend {
 	var (
 		minCount int64 = math.MaxInt64
 		minPod   *backend.Backend
 	)
 
-	p.lock.Lock()
-	defer p.lock.Unlock()
+	m.lock.Lock()
+	defer m.lock.Unlock()
 
-	for _, pod := range p.inner {
+	for _, pod := range m.inner {
 		if count := pod.Count(); count < minCount {
 			minCount = count
 			minPod = pod
@@ -66,22 +67,35 @@ func (p *Map) Elect() *backend.Backend {
 	return minPod
 }
 
-func (p *Map) AddRequests(url string, delta int64) {
+func (m *Map) AddRequests(url string, delta int64) {
 	if url == "" {
 		return
 	}
 
-	instance, ok := p.inner[url]
+	instance, ok := m.inner[url]
 	if !ok {
-		p.logger.Info("could not find backend", "url", url)
+		m.logger.Info("could not find backend", "url", url)
 		return
 	}
 
 	instance.AddRequests(delta)
 }
 
-func (p *Map) DebugPrint() {
-	for _, pod := range p.inner {
-		p.logger.Info(fmt.Sprintf("pod '%s' has '%d' requests", pod.URL(), pod.Count()))
+func (m *Map) DebugPrint() {
+	for _, pod := range m.inner {
+		m.logger.Info(fmt.Sprintf("pod '%s' has '%d' requests", pod.URL(), pod.Count()))
+	}
+}
+
+func (m *Map) Iterate() iter.Seq[*backend.Backend] {
+	return func(yield func(*backend.Backend) bool) {
+		m.lock.Lock()
+		defer m.lock.Unlock()
+
+		for _, pod := range m.inner {
+			if !yield(pod) {
+				return
+			}
+		}
 	}
 }

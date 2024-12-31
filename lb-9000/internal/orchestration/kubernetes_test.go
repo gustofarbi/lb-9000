@@ -1,4 +1,4 @@
-package pool
+package orchestration
 
 import (
 	"github.com/stretchr/testify/assert"
