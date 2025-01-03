@@ -1,11 +1,11 @@
 package memory
 
 import (
+	"context"
 	"fmt"
 	"iter"
 	"lb-9000/lb-9000/internal/backend"
 	"log/slog"
-	"math"
 	"sync"
 )
 
@@ -27,67 +27,44 @@ func NewMemoryStore(logger *slog.Logger) *Map {
 	}
 }
 
-func (m *Map) Add(backend *backend.Backend) {
+func (m *Map) Add(_ context.Context, backend *backend.Backend) error {
 	url := backend.URL()
 	name := backend.Name()
 
 	m.logger.Info("adding", "url", url, "name", name)
 
 	m.inner[url] = backend
+
+	return nil
 }
 
-func (m *Map) Remove(url string) {
+func (m *Map) Remove(_ context.Context, url string) error {
 	if url == "" {
-		return
+		return fmt.Errorf("url is empty")
 	}
 
 	m.logger.Info(fmt.Sprintf("pod '%s' deleted", url))
 	delete(m.inner, url)
+
+	return nil
 }
 
-func (m *Map) Elect() *backend.Backend {
-	var (
-		minCount int64 = math.MaxInt64
-		minPod   *backend.Backend
-	)
-
-	m.lock.Lock()
-	defer m.lock.Unlock()
-
-	for _, pod := range m.inner {
-		if count := pod.Count(); count < minCount {
-			minCount = count
-			minPod = pod
-		}
-		if minCount == 0 {
-			break
-		}
-	}
-
-	return minPod
-}
-
-func (m *Map) AddRequests(url string, delta int64) {
+func (m *Map) AddRequests(_ context.Context, url string, delta int64) error {
 	if url == "" {
-		return
+		return fmt.Errorf("url is empty")
 	}
 
 	instance, ok := m.inner[url]
 	if !ok {
-		m.logger.Info("could not find backend", "url", url)
-		return
+		return fmt.Errorf("could not find backend")
 	}
 
 	instance.AddRequests(delta)
+
+	return nil
 }
 
-func (m *Map) DebugPrint() {
-	for _, pod := range m.inner {
-		m.logger.Info(fmt.Sprintf("pod '%s' has '%d' requests", pod.URL(), pod.Count()))
-	}
-}
-
-func (m *Map) Iterate() iter.Seq[*backend.Backend] {
+func (m *Map) Iterate(context.Context) (iter.Seq[*backend.Backend], error) {
 	return func(yield func(*backend.Backend) bool) {
 		m.lock.Lock()
 		defer m.lock.Unlock()
@@ -97,5 +74,5 @@ func (m *Map) Iterate() iter.Seq[*backend.Backend] {
 				return
 			}
 		}
-	}
+	}, nil
 }

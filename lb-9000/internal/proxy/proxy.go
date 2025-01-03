@@ -8,6 +8,7 @@ import (
 )
 
 func Start(pool *pool.Pool, port string) {
+	// todo init pool here
 	proxy := httputil.ReverseProxy{
 		Director:       pool.Director,
 		ModifyResponse: pool.ModifyResponse,

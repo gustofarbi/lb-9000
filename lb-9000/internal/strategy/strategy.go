@@ -1,13 +1,15 @@
 package strategy
 
 import (
+	"context"
+	"fmt"
 	"lb-9000/lb-9000/internal/backend"
 	"lb-9000/lb-9000/internal/store"
 	"math"
 )
 
 type Strategy interface {
-	Elect(store store.Store) *backend.Backend
+	Elect(ctx context.Context, store store.Store) (*backend.Backend, error)
 }
 
 func FillHoles() Strategy {
@@ -16,13 +18,18 @@ func FillHoles() Strategy {
 
 type fillHolesStrategy struct{}
 
-func (f fillHolesStrategy) Elect(store store.Store) *backend.Backend {
+func (f fillHolesStrategy) Elect(ctx context.Context, store store.Store) (*backend.Backend, error) {
 	var (
 		minCount   int64 = math.MaxInt64
 		minBackend *backend.Backend
 	)
 
-	for instance := range store.Iterate() {
+	iterator, err := store.Iterate(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("iterating backends: %w", err)
+	}
+
+	for instance := range iterator {
 		if count := instance.Count(); count < minCount {
 			minCount = count
 			minBackend = instance
@@ -32,5 +39,5 @@ func (f fillHolesStrategy) Elect(store store.Store) *backend.Backend {
 		}
 	}
 
-	return minBackend
+	return minBackend, nil
 }

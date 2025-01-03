@@ -1,6 +1,14 @@
 refreshRate: 5s
+
 specs:
   namespace: default
   serviceName: server-service
   selector: app=server
   containerPort: "8080"
+
+store:
+  type: redis
+  addr: localhost:6379
+  username: ""
+  password: ""
+  db: 0

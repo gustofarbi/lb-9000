@@ -1,7 +1,9 @@
 package pool
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"lb-9000/lb-9000/internal/orchestration"
 	"lb-9000/lb-9000/internal/store"
 	"lb-9000/lb-9000/internal/strategy"
@@ -42,14 +44,22 @@ func (p *Pool) Director(request *http.Request) {
 		panic("pool not initialized")
 	}
 
-	elected := p.strategy.Elect(p.backendStore)
+	ctx := request.Context()
+
+	elected, err := p.strategy.Elect(ctx, p.backendStore)
+	if err != nil {
+		panic("electing a backend: " + err.Error())
+	}
 	if elected == nil {
 		panic("no pods available")
 	}
 
 	minUrl := elected.URL()
 
-	p.backendStore.AddRequests(minUrl, 1)
+	if err = p.backendStore.AddRequests(ctx, minUrl, 1); err != nil {
+		p.logger.Error("error adding request to backend", "error", err)
+		return
+	}
 
 	p.logger.Info(
 		"request directed to pod",
@@ -72,7 +82,10 @@ func (p *Pool) ModifyResponse(response *http.Response) error {
 		return nil
 	}
 
-	p.backendStore.AddRequests(name, -1)
+	if err = p.backendStore.AddRequests(context.Background(), name, -1); err != nil {
+		p.logger.Error("error removing request from backend", "error", err)
+		return nil
+	}
 
 	return nil
 }
@@ -95,6 +108,20 @@ func (p *Pool) Init() error {
 
 func (p *Pool) startLogger() {
 	for range time.Tick(p.refreshRate) {
-		p.backendStore.DebugPrint()
+		ctx := context.Background()
+		ctx, cancel := context.WithTimeout(ctx, p.refreshRate)
+		iterator, err := p.backendStore.Iterate(ctx)
+		if err != nil {
+			p.logger.Error("cannot iterate backends", "error", err)
+			cancel()
+			return
+		}
+
+		cancel()
+
+		for backend := range iterator {
+			p.logger.Info(fmt.Sprintf("pod '%s' has '%d' requests", backend.URL(), backend.Count()))
+
+		}
 	}
 }

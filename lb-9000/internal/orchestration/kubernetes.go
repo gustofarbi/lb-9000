@@ -1,6 +1,7 @@
 package orchestration
 
 import (
+	"context"
 	"fmt"
 	core "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/watch"
@@ -56,6 +57,8 @@ func (k *kubernetes) GetBackendNameFromResponse(response *http.Response) (string
 }
 
 func (k *kubernetes) StartObserver(store store.Store) {
+	ctx := context.Background()
+
 	for event := range k.watcher.ResultChan() {
 		podFromEvent, ok := event.Object.(*core.Pod)
 		if !ok {
@@ -68,21 +71,45 @@ func (k *kubernetes) StartObserver(store store.Store) {
 		switch event.Type {
 		case watch.Added:
 			// when a pod is added, it needs to be added to the pool
-			// at this time the pod may not have an URL assigned yet
-			store.Add(backend.NewBackend(podFromEvent.Status.PodIP, podFromEvent.Name))
+			// at this time the pod may not have a URL assigned yet
+			k.addBackend(ctx, store, podFromEvent)
 		case watch.Deleted:
 			// when a pod is deleted, it needs to be removed from the pool
-			store.Remove(podFromEvent.Status.PodIP)
+			k.removeBackend(ctx, store, podFromEvent)
 		case watch.Modified:
 			// there are several cases when a pod is modified:
 			// 1. the pod is being deleted -> it will have a deletion timestamp
 			// 2. the pod changed state and is now running -> it will have an URL
 			if podFromEvent.DeletionTimestamp != nil {
-				store.Remove(podFromEvent.Status.PodIP)
+				k.removeBackend(ctx, store, podFromEvent)
 			} else if podFromEvent.Status.PodIP != "" {
 				// todo look at the state here maybe?
-				store.Add(backend.NewBackend(podFromEvent.Status.PodIP, podFromEvent.Name))
+				k.addBackend(ctx, store, podFromEvent)
 			}
+		}
+	}
+}
+
+func (k *kubernetes) removeBackend(
+	ctx context.Context,
+	store store.Store,
+	pod *core.Pod,
+) {
+	if err := store.Remove(ctx, pod.Status.PodIP); err != nil {
+		if k.logger != nil {
+			k.logger.Error("error removing backend", "error", err)
+		}
+	}
+}
+
+func (k *kubernetes) addBackend(
+	ctx context.Context,
+	store store.Store,
+	pod *core.Pod,
+) {
+	if err := store.Add(ctx, backend.NewBackend(pod.Status.PodIP, pod.Name)); err != nil {
+		if k.logger != nil {
+			k.logger.Error("error adding backend", "error", err)
 		}
 	}
 }

@@ -9,6 +9,7 @@ import (
 type Config struct {
 	RefreshRate time.Duration
 	Specs       Specs
+	Store       Store
 }
 
 type Specs struct {
@@ -16,6 +17,14 @@ type Specs struct {
 	ServiceName   string
 	Selector      string
 	ContainerPort int
+}
+
+type Store struct {
+	Type     string
+	Addr     string
+	Username string
+	Password string
+	DB       int
 }
 
 func Parse(path string) (*Config, error) {
