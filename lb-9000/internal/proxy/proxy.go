@@ -8,7 +8,8 @@ import (
 )
 
 func Start(pool *pool.Pool, port string) {
-	// todo init pool here
+	pool.Init()
+
 	proxy := httputil.ReverseProxy{
 		Director:       pool.Director,
 		ModifyResponse: pool.ModifyResponse,
@@ -23,7 +24,8 @@ func Start(pool *pool.Pool, port string) {
 	}()
 
 	slog.Info("listening on", "port", port)
+
 	if err := http.ListenAndServe(":"+port, &proxy); err != nil {
-		slog.Error("error listening", "err", err)
+		slog.Error("error listening for connections", "err", err)
 	}
 }

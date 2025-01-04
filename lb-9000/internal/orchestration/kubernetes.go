@@ -15,18 +15,6 @@ import (
 	"strings"
 )
 
-func NewKubernetes(
-	logger *slog.Logger,
-	watcher watch.Interface,
-	config *config.Config,
-) Orchestration {
-	return &kubernetes{
-		logger:  logger,
-		watcher: watcher,
-		config:  config,
-	}
-}
-
 type kubernetes struct {
 	logger  *slog.Logger
 	watcher watch.Interface

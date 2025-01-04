@@ -2,7 +2,6 @@ package pool
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"lb-9000/lb-9000/internal/orchestration"
 	"lb-9000/lb-9000/internal/store"
@@ -90,9 +89,9 @@ func (p *Pool) ModifyResponse(response *http.Response) error {
 	return nil
 }
 
-func (p *Pool) Init() error {
+func (p *Pool) Init() {
 	if p.initialized {
-		return errors.New("pool already initialized")
+		return
 	}
 
 	go p.orchestration.StartObserver(p.backendStore)
@@ -102,8 +101,6 @@ func (p *Pool) Init() error {
 	if p.logger != nil {
 		p.logger.Info("refreshing pods")
 	}
-
-	return nil
 }
 
 func (p *Pool) startLogger() {
