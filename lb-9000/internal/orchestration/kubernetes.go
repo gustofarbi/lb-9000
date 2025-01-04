@@ -35,7 +35,7 @@ func (k *kubernetes) DirectRequest(
 	)
 }
 
-func (k *kubernetes) GetBackendNameFromResponse(response *http.Response) (string, error) {
+func (k *kubernetes) GetBackendIDFromResponse(response *http.Response) (string, error) {
 	ip, err := getIpFromHost(response.Request.URL.Host)
 	if err != nil {
 		return "", fmt.Errorf("error getting ip from host: %w", err)

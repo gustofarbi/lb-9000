@@ -38,23 +38,23 @@ func (m *Map) Add(_ context.Context, backend *backend.Backend) error {
 	return nil
 }
 
-func (m *Map) Remove(_ context.Context, url string) error {
-	if url == "" {
-		return fmt.Errorf("url is empty")
+func (m *Map) Remove(_ context.Context, id string) error {
+	if id == "" {
+		return fmt.Errorf("id is empty")
 	}
 
-	m.logger.Info(fmt.Sprintf("pod '%s' deleted", url))
-	delete(m.inner, url)
+	m.logger.Info(fmt.Sprintf("pod '%s' deleted", id))
+	delete(m.inner, id)
 
 	return nil
 }
 
-func (m *Map) AddRequests(_ context.Context, url string, delta int64) error {
-	if url == "" {
-		return fmt.Errorf("url is empty")
+func (m *Map) AddRequests(_ context.Context, id string, delta int64) error {
+	if id == "" {
+		return fmt.Errorf("id is empty")
 	}
 
-	instance, ok := m.inner[url]
+	instance, ok := m.inner[id]
 	if !ok {
 		return fmt.Errorf("could not find backend")
 	}

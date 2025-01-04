@@ -75,13 +75,13 @@ func (p *Pool) Director(request *http.Request) {
 }
 
 func (p *Pool) ModifyResponse(response *http.Response) error {
-	name, err := p.orchestration.GetBackendNameFromResponse(response)
+	id, err := p.orchestration.GetBackendIDFromResponse(response)
 	if err != nil {
-		p.logger.Error("error getting name from response", "error", err)
+		p.logger.Error("error getting id from response", "error", err)
 		return nil
 	}
 
-	if err = p.backendStore.AddRequests(context.Background(), name, -1); err != nil {
+	if err = p.backendStore.AddRequests(context.Background(), id, -1); err != nil {
 		p.logger.Error("error removing request from backend", "error", err)
 		return nil
 	}

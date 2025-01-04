@@ -2,9 +2,9 @@ package main
 
 import (
 	"fmt"
+	"github.com/google/uuid"
 	"io"
 	"log/slog"
-	"math/rand"
 	"net/http"
 	"os"
 	"strconv"
@@ -37,8 +37,9 @@ func main() {
 			"http://%s:%d/%s",
 			service,
 			port,
-			randString(10),
+			uuid.New(),
 		)
+
 		acquire()
 		go func() {
 			defer release()
@@ -47,8 +48,15 @@ func main() {
 	}
 }
 
+var client = &http.Client{}
+
 func fetchURL(url string) {
-	response, err := http.Get(url)
+	request, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		slog.Error("cannot create request", "error", err)
+		return
+	}
+	response, err := client.Do(request)
 	if err != nil {
 		slog.Error("error getting pod", "err", err)
 		return
@@ -58,17 +66,9 @@ func fetchURL(url string) {
 		b, err := io.ReadAll(response.Body)
 		if err != nil {
 			slog.Error("error reading response body", "err", err)
+			return
 		}
+
 		slog.Info("response", "body", string(b))
 	}
-}
-
-var letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
-
-func randString(n int) string {
-	b := make([]rune, n)
-	for i := range b {
-		b[i] = letters[rand.Intn(len(letters))]
-	}
-	return string(b)
 }
