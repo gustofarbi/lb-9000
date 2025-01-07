@@ -6,7 +6,7 @@ import (
 	"lb-9000/lb-9000/internal/orchestration"
 	"lb-9000/lb-9000/internal/pool"
 	"lb-9000/lb-9000/internal/proxy"
-	"lb-9000/lb-9000/internal/store/memory"
+	"lb-9000/lb-9000/internal/store"
 	"lb-9000/lb-9000/internal/strategy"
 	"log/slog"
 	"os"
@@ -34,7 +34,7 @@ func run() error {
 	}
 
 	podPool := pool.New(
-		memory.NewMemoryStore(logger),
+		store.Get(appConfig, logger),
 		strategy.FillHoles(),
 		orchestrator,
 		logger,

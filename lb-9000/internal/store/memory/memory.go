@@ -15,7 +15,7 @@ type Map struct {
 	lock   *sync.Mutex
 }
 
-func NewMemoryStore(logger *slog.Logger) *Map {
+func New(logger *slog.Logger) *Map {
 	if logger == nil {
 		logger = slog.Default()
 	}

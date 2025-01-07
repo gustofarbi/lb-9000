@@ -26,6 +26,7 @@ func (k *kubernetes) DirectRequest(
 	backend *backend.Backend,
 ) {
 	request.URL.Scheme = "http"
+	// todo this should be done beforehand
 	request.URL.Host = fmt.Sprintf(
 		"%s.%s.%s.svc.cluster.local:%d",
 		strings.Replace(backend.URL(), ".", "-", -1),

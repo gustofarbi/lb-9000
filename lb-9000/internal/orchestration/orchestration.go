@@ -14,6 +14,6 @@ type Orchestration interface {
 	// DirectRequest directs the request to the correct backend
 	DirectRequest(request *http.Request, backend *backend.Backend)
 
-	// GetBackendNameFromResponse gets the name of the backend from the response
+	// GetBackendIDFromResponse gets the name of the backend from the response
 	GetBackendIDFromResponse(response *http.Response) (string, error)
 }

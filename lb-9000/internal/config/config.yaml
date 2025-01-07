@@ -8,7 +8,7 @@ specs:
 
 store:
   type: redis
-  addr: localhost:6379
+  addr: redis:6379
   username: ""
   password: ""
   db: 0

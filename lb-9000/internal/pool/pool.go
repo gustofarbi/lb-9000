@@ -60,7 +60,7 @@ func (p *Pool) Director(request *http.Request) {
 		return
 	}
 
-	p.logger.Info(
+	p.logger.Debug(
 		"request directed to pod",
 		"podUrl", minUrl,
 		"requests", elected.Count(),
