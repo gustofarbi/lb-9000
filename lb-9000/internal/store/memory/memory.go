@@ -3,6 +3,7 @@ package memory
 import (
 	"context"
 	"fmt"
+	"golang.org/x/exp/maps"
 	"iter"
 	"lb-9000/lb-9000/internal/backend"
 	"log/slog"
@@ -62,6 +63,10 @@ func (m *Map) AddRequests(_ context.Context, id string, delta int64) error {
 	instance.AddRequests(delta)
 
 	return nil
+}
+
+func (m *Map) All(_ context.Context) ([]*backend.Backend, error) {
+	return maps.Values(m.inner), nil
 }
 
 func (m *Map) Iterate(context.Context) (iter.Seq[*backend.Backend], error) {

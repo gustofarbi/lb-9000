@@ -15,6 +15,7 @@ type Store interface {
 	Remove(ctx context.Context, id string) error
 	AddRequests(ctx context.Context, id string, n int64) error
 	Iterate(ctx context.Context) (iter.Seq[*backend.Backend], error)
+	All(ctx context.Context) ([]*backend.Backend, error)
 }
 
 func Get(config *config.Config, logger *slog.Logger) Store {

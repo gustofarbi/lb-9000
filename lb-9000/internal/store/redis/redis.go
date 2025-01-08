@@ -32,6 +32,36 @@ type Redis struct {
 	logger *slog.Logger
 }
 
+func (r *Redis) All(ctx context.Context) ([]*backend.Backend, error) {
+	keys, err := r.redis.SMembers(ctx, cacheTag).Result()
+	if err != nil {
+		return nil, fmt.Errorf("getting keys by tag: %w", err)
+	}
+
+	backends, err := r.redis.MGet(ctx, keys...).Result()
+	if err != nil {
+		return nil, fmt.Errorf("getting backends by keys (%s): %w", strings.Join(keys, ", "), err)
+	}
+
+	result := make([]*backend.Backend, 0, len(backends))
+
+	for _, backendCandidate := range backends {
+		if backendCandidate == nil {
+			continue
+		}
+
+		var b backend.Backend
+
+		if err = b.UnmarshalBinary([]byte(backendCandidate.(string))); err != nil {
+			return nil, fmt.Errorf("unmarshaling backend: %w", err)
+		}
+
+		result = append(result, &b)
+	}
+
+	return result, nil
+}
+
 func (r *Redis) Iterate(ctx context.Context) (iter.Seq[*backend.Backend], error) {
 	keys, err := r.redis.SMembers(ctx, cacheTag).Result()
 	if err != nil {
