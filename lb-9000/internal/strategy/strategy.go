@@ -22,12 +22,12 @@ func RoundRobin() Strategy {
 }
 
 func (r roundRobin) Elect(ctx context.Context, store store.Store) (*backend.Backend, error) {
-	return store.Get(ctx, getNextServer())
-}
+	backends, err := store.All(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("getting all backends: %w", err)
+	}
 
-func getNextServer() string {
-	index := atomic.AddUint64(&currentIndex, 1)
-	return backendServers[(int(index)-1)%len(backendServers)]
+	return backends[atomic.AddUint64(&r.currentIndex, 1)%uint64(len(backends))], nil
 }
 
 func FillHoles() Strategy {

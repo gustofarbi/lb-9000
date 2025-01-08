@@ -1,5 +1,7 @@
 refreshRate: 5s
 
+
+
 specs:
   namespace: default
   serviceName: server-service
