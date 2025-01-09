@@ -7,9 +7,9 @@ import (
 )
 
 type Backend struct {
+	count *atomic.Int64
 	id    string
 	name  string
-	count *atomic.Int64
 }
 
 type innerBackend struct {
