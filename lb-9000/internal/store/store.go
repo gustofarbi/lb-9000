@@ -19,7 +19,7 @@ type Store interface {
 }
 
 func Get(config *config.Config, logger *slog.Logger) Store {
-	switch config.Store.Type {
+	switch config.StoreType {
 	case "memory":
 		return memory.New(logger)
 	case "redis":

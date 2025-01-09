@@ -6,7 +6,7 @@ import (
 )
 
 func TestParse(t *testing.T) {
-	cfg, err := Parse("config.yaml")
+	cfg, err := Parse(".env")
 	assert.NoError(t, err)
-	assert.Equal(t, 8080, cfg.Specs.ContainerPort)
+	assert.Equal(t, 8080, cfg.ContainerPort)
 }

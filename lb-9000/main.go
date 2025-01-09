@@ -21,7 +21,7 @@ func main() {
 }
 
 func run() error {
-	appConfig, err := appconfig.Parse("lb-9000/internal/config/config.yaml")
+	appConfig, err := appconfig.Parse("lb-9000/internal/config/.env")
 	if err != nil {
 		return fmt.Errorf("parsing config: %w", err)
 	}
@@ -41,7 +41,7 @@ func run() error {
 		appConfig.RefreshRate,
 	)
 
-	proxy.Start(podPool, strconv.Itoa(appConfig.Specs.ContainerPort))
+	proxy.Start(podPool, strconv.Itoa(appConfig.ContainerPort))
 
 	return nil
 }

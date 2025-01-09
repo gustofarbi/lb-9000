@@ -29,9 +29,9 @@ func NewKubernetes(
 
 	watcher, err := clientSet.
 		CoreV1().
-		Pods(config.Specs.Namespace).
+		Pods(config.Namespace).
 		Watch(context.Background(), metav1.ListOptions{
-			LabelSelector: config.Specs.Selector,
+			LabelSelector: config.Selector,
 			FieldSelector: "status.phase=" + string(core.PodRunning),
 		})
 

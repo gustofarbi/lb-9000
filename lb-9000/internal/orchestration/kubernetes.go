@@ -30,9 +30,9 @@ func (k *kubernetes) DirectRequest(
 	request.URL.Host = fmt.Sprintf(
 		"%s.%s.%s.svc.cluster.local:%d",
 		strings.Replace(backend.URL(), ".", "-", -1),
-		k.config.Specs.ServiceName,
-		k.config.Specs.Namespace,
-		k.config.Specs.ContainerPort,
+		k.config.ServiceName,
+		k.config.Namespace,
+		k.config.ContainerPort,
 	)
 }
 

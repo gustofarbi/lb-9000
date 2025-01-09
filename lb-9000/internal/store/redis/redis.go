@@ -17,10 +17,10 @@ func New(logger *slog.Logger, cfg *config.Config) *Redis {
 	return &Redis{
 		redis: redis.NewClient(
 			&redis.Options{
-				Addr:     cfg.Store.Addr,
-				Username: cfg.Store.Username,
-				Password: cfg.Store.Password,
-				DB:       cfg.Store.DB,
+				Addr:     cfg.StoreAddr,
+				Username: cfg.StoreUsername,
+				Password: cfg.StorePassword,
+				DB:       cfg.StoreDB,
 			},
 		),
 		logger: logger,

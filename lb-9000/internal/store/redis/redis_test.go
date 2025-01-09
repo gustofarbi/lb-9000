@@ -39,10 +39,10 @@ func TestRedis(t *testing.T) {
 
 	endpoint, err := redisC.Endpoint(ctx, "")
 
-	cfg, err := config.Parse("../../config/config.yaml")
+	cfg, err := config.Parse("../../config/.env")
 	assert.NoError(t, err)
 
-	cfg.Store.Addr = endpoint
+	cfg.StoreAddr = endpoint
 
 	store := New(slog.Default(), cfg)
 
