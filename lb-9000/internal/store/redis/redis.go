@@ -3,26 +3,21 @@ package redis
 import (
 	"context"
 	"fmt"
-	"github.com/redis/go-redis/v9"
 	"iter"
 	"lb-9000/lb-9000/internal/backend"
 	"lb-9000/lb-9000/internal/config"
+	"lb-9000/lb-9000/internal/utils"
 	"log/slog"
 	"strings"
+
+	"github.com/redis/go-redis/v9"
 )
 
 const cacheTag = "backends"
 
 func New(logger *slog.Logger, cfg *config.Config) *Redis {
 	return &Redis{
-		redis: redis.NewClient(
-			&redis.Options{
-				Addr:     cfg.StoreAddr,
-				Username: cfg.StoreUsername,
-				Password: cfg.StorePassword,
-				DB:       cfg.StoreDB,
-			},
-		),
+		redis:  utils.GetRedisClient(cfg),
 		logger: logger,
 	}
 }

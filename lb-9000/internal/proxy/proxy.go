@@ -1,10 +1,14 @@
 package proxy
 
 import (
+	"context"
 	"lb-9000/lb-9000/internal/pool"
 	"log/slog"
 	"net/http"
 	"net/http/httputil"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 )
 
@@ -30,8 +34,6 @@ func Start(pool *pool.Pool, port string) {
 		}
 	}()
 
-	slog.Info("listening on", "port", port)
-
 	server := http.Server{
 		Addr:    ":" + port,
 		Handler: proxy,
@@ -39,6 +41,18 @@ func Start(pool *pool.Pool, port string) {
 		ReadHeaderTimeout: 30 * time.Second,
 	}
 
+	stopCh := make(chan os.Signal, 1)
+	signal.Notify(stopCh, os.Interrupt, syscall.SIGTERM)
+
+	go func() {
+		<-stopCh
+		slog.Info("shutting down")
+		if err := server.Shutdown(context.Background()); err != nil {
+			slog.Error("error shutting down server", "err", err)
+		}
+	}()
+
+	slog.Info("listening on", "port", port)
 	if err := server.ListenAndServe(); err != nil {
 		slog.Error("error listening for connections", "err", err)
 	}

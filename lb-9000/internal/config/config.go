@@ -7,16 +7,19 @@ import (
 )
 
 type Config struct {
-	Namespace     string        `mapstructure:"SPEC_NAMESPACE"`
-	ServiceName   string        `mapstructure:"SPEC_SERVICE_NAME"`
-	Selector      string        `mapstructure:"SPEC_SELECTOR"`
-	StoreType     string        `mapstructure:"STORE_TYPE"`
-	StoreAddr     string        `mapstructure:"STORE_ADDR"`
-	StoreUsername string        `mapstructure:"STORE_USERNAME"`
-	StorePassword string        `mapstructure:"STORE_PASSWORD"`
-	RefreshRate   time.Duration `mapstructure:"REFRESH_RATE"`
-	ContainerPort int           `mapstructure:"SPEC_CONTAINER_PORT"`
-	StoreDB       int           `mapstructure:"STORE_DB"`
+	ContainerPort int    `mapstructure:"SPEC_CONTAINER_PORT"`
+	Namespace     string `mapstructure:"SPEC_NAMESPACE"`
+	ServiceName   string `mapstructure:"SPEC_SERVICE_NAME"`
+	Selector      string `mapstructure:"SPEC_SELECTOR"`
+
+	StoreType     string `mapstructure:"STORE_TYPE"`
+	StoreAddr     string `mapstructure:"STORE_ADDR"`
+	StoreUsername string `mapstructure:"STORE_USERNAME"`
+	StorePassword string `mapstructure:"STORE_PASSWORD"`
+	StoreDB       int    `mapstructure:"STORE_DB"`
+
+	RefreshRate time.Duration `mapstructure:"REFRESH_RATE"`
+	LockTTL     time.Duration `mapstructure:"LOCK_TTL"`
 }
 
 func Parse(path string) (*Config, error) {

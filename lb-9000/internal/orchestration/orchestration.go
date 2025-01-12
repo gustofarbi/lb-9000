@@ -16,4 +16,6 @@ type Orchestration interface {
 
 	// GetBackendIDFromResponse gets the name of the backend from the response
 	GetBackendIDFromResponse(response *http.Response) (string, error)
+
+	InstanceID() string
 }

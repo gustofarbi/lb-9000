@@ -3,6 +3,7 @@ package pool
 import (
 	"context"
 	"fmt"
+	"lb-9000/lb-9000/internal/election"
 	"lb-9000/lb-9000/internal/orchestration"
 	"lb-9000/lb-9000/internal/store"
 	"lb-9000/lb-9000/internal/strategy"
@@ -15,6 +16,7 @@ type Pool struct {
 	backendStore  store.Store
 	strategy      strategy.Strategy
 	orchestration orchestration.Orchestration
+	elector       *election.Elector
 
 	logger *slog.Logger
 
@@ -26,6 +28,7 @@ func New(
 	store store.Store,
 	strategy strategy.Strategy,
 	orchestration orchestration.Orchestration,
+	elector *election.Elector,
 	logger *slog.Logger,
 	refreshRate time.Duration,
 ) *Pool {
@@ -33,6 +36,7 @@ func New(
 		backendStore:  store,
 		strategy:      strategy,
 		orchestration: orchestration,
+		elector:       elector,
 		logger:        logger,
 		refreshRate:   refreshRate,
 	}
@@ -60,10 +64,11 @@ func (p *Pool) Director(request *http.Request) {
 		return
 	}
 
-	p.logger.Debug(
+	p.logger.Info(
 		"request directed to pod",
 		"podUrl", minUrl,
 		"requests", elected.Count(),
+		"instanceId", p.orchestration.InstanceID(),
 	)
 
 	if minUrl == "" {
@@ -94,13 +99,20 @@ func (p *Pool) Init() {
 		return
 	}
 
-	go p.orchestration.StartObserver(p.backendStore)
-	go p.startLogger()
+	go p.elector.Loop()
+
+	go func() {
+
+		for range time.Tick(p.refreshRate / 2) {
+			if p.elector.IsLeader() {
+				go p.startLogger()
+				p.logger.Info("observing backends")
+				p.orchestration.StartObserver(p.backendStore)
+			}
+		}
+	}()
 
 	p.initialized = true
-	if p.logger != nil {
-		p.logger.Info("refreshing pods")
-	}
 }
 
 func (p *Pool) startLogger() {

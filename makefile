@@ -44,9 +44,6 @@ lint:
 test:
 	go test ./...
 
-betteralign:
-	betteralign ./...
-
 staticcheck:
 	staticcheck ./...
 
@@ -55,4 +52,3 @@ qa:
 	$(MAKE) gosec
 	$(MAKE) lint
 	$(MAKE) staticcheck
-	$(MAKE) betteralign

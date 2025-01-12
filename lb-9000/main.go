@@ -3,11 +3,13 @@ package main
 import (
 	"fmt"
 	appconfig "lb-9000/lb-9000/internal/config"
+	"lb-9000/lb-9000/internal/election"
 	"lb-9000/lb-9000/internal/orchestration"
 	"lb-9000/lb-9000/internal/pool"
 	"lb-9000/lb-9000/internal/proxy"
 	"lb-9000/lb-9000/internal/store"
 	"lb-9000/lb-9000/internal/strategy"
+	"lb-9000/lb-9000/internal/utils"
 	"log/slog"
 	"os"
 	"strconv"
@@ -33,10 +35,18 @@ func run() error {
 		return fmt.Errorf("creating orchestrator: %w", err)
 	}
 
+	elector := election.NewElector(
+		orchestrator.InstanceID(),
+		logger,
+		utils.GetRedisClient(appConfig),
+		appConfig.LockTTL,
+	)
+
 	podPool := pool.New(
 		store.Get(appConfig, logger),
 		strategy.FillHoles(),
 		orchestrator,
+		elector,
 		logger,
 		appConfig.RefreshRate,
 	)

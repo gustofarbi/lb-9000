@@ -3,8 +3,6 @@ package orchestration
 import (
 	"context"
 	"fmt"
-	core "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/watch"
 	"lb-9000/lb-9000/internal/backend"
 	"lb-9000/lb-9000/internal/config"
 	"lb-9000/lb-9000/internal/store"
@@ -12,7 +10,11 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
+
+	core "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/watch"
 )
 
 type kubernetes struct {
@@ -77,6 +79,10 @@ func (k *kubernetes) StartObserver(store store.Store) {
 			}
 		}
 	}
+}
+
+func (k *kubernetes) InstanceID() string {
+	return os.Getenv("HOSTNAME")
 }
 
 func (k *kubernetes) removeBackend(
