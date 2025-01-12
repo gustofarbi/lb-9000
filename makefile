@@ -10,6 +10,7 @@ apply:
 	kubectl apply -f internal/server/server.yaml
 	kubectl apply -f internal/client/client.yaml
 	kubectl apply -f lb-9000/lb.yaml
+	kubectl apply -f lb-9000/internal/store/redis/redis.yaml
 
 deploy:
 	$(MAKE) build-images
@@ -33,3 +34,21 @@ create-cluster:
 
 destroy-cluster:
 	kind delete cluster --name kind
+
+gosec:
+	gosec -quiet ./...
+
+lint:
+	golangci-lint run ./...
+
+test:
+	go test ./...
+
+staticcheck:
+	staticcheck ./...
+
+qa:
+	$(MAKE) test
+	$(MAKE) gosec
+	$(MAKE) lint
+	$(MAKE) staticcheck

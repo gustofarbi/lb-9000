@@ -2,10 +2,11 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"log/slog"
-	"math/rand"
+	"math/big"
 	"net/http"
 	"os"
 	"os/signal"
@@ -27,8 +28,9 @@ func main() {
 	router.Handle("/", handle(counter))
 
 	server := http.Server{
-		Addr:    ":" + port,
-		Handler: router,
+		Addr:              ":" + port,
+		Handler:           router,
+		ReadHeaderTimeout: 30 * time.Second,
 	}
 
 	waiter := make(chan struct{}, 1)
@@ -71,11 +73,21 @@ func handle(counter *atomic.Int32) http.HandlerFunc {
 		counter.Add(1)
 		defer counter.Add(-1)
 
-		sleepTime := rand.Intn(8)
-		time.Sleep(time.Duration(sleepTime) * time.Second)
-
-		_, err := fmt.Fprintf(w, "%s: slept for %d seconds at %s", os.Getenv("POD_NAME"), sleepTime, r.URL.Path)
+		sleepTime, err := rand.Int(rand.Reader, big.NewInt(8))
 		if err != nil {
+			http.Error(w, "cannot get random number", http.StatusInternalServerError)
+			return
+		}
+
+		time.Sleep(time.Duration(sleepTime.Int64()) * time.Second)
+
+		if _, err = fmt.Fprintf(
+			w,
+			"%s: slept for %d seconds at %s",
+			os.Getenv("POD_NAME"),
+			sleepTime,
+			r.URL.Path,
+		); err != nil {
 			slog.Error("error writing response", "err", err)
 		}
 	}
