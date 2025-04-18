@@ -31,7 +31,7 @@ func (k *kubernetes) DirectRequest(
 	// todo this should be done beforehand
 	request.URL.Host = fmt.Sprintf(
 		"%s.%s.%s.svc.cluster.local:%d",
-		strings.Replace(backend.URL(), ".", "-", -1),
+		strings.ReplaceAll(backend.URL(), ".", "-"),
 		k.config.ServiceName,
 		k.config.Namespace,
 		k.config.ContainerPort,
@@ -119,7 +119,7 @@ func getIpFromHost(host string) (string, error) {
 		return "", fmt.Errorf("expected to be able to cut host")
 	}
 
-	ip = strings.Replace(ip, "-", ".", -1)
+	ip = strings.ReplaceAll(ip, "-", ".")
 	parsedIp := net.ParseIP(ip)
 	if parsedIp == nil {
 		return "", fmt.Errorf("could not parse ip '%s'", ip)

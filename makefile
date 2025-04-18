@@ -47,8 +47,8 @@ test:
 staticcheck:
 	staticcheck ./...
 
-qa:
-	$(MAKE) test
-	$(MAKE) gosec
-	$(MAKE) lint
-	$(MAKE) staticcheck
+golangci-lint:
+	golangci-lint run ./...
+
+qa: gosec lint staticcheck golangci-lint test
+
